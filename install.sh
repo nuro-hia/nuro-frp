@@ -226,8 +226,12 @@ add_frpc_rule() {
     echo "=== 添加 FRPC 端口规则 ==="
     while true; do
         read -p "规则名称（如 nas、ssh1、web80 等）: " RULE_NAME
-        read -p "类型 (tcp/udp) [tcp]: " TYPE
-        TYPE=${TYPE:-tcp}
+        while true; do
+            read -p "类型 (tcp/udp) [tcp]: " TYPE
+            TYPE=${TYPE:-tcp}
+            [[ "$TYPE" == "tcp" || "$TYPE" == "udp" ]] && break
+            echo "只能输入 tcp 或 udp，请重新输入！"
+        done
         read -p "本地IP [127.0.0.1]: " LOCAL_IP
         LOCAL_IP=${LOCAL_IP:-127.0.0.1}
         read -p "本地端口: " LOCAL_PORT
