@@ -1,15 +1,16 @@
 #!/bin/bash
 set -e
 
+SCRIPT_URL="https://raw.githubusercontent.com/nuro-hia/nuro-frp/main/install.sh" # ← 修改为你的真实地址
+
 FRP_INSTALL_DIR="/opt/frp"
 ROLE_FILE="$FRP_INSTALL_DIR/.frp_role"
 FRPS_BIN="/usr/local/bin/frps"
 FRPC_BIN="/usr/local/bin/frpc"
 IS_OPENWRT=0
 
-is_openwrt() {
-    [ -f /etc/openwrt_release ] && IS_OPENWRT=1 || IS_OPENWRT=0
-}
+# 判断平台
+is_openwrt() { [ -f /etc/openwrt_release ] && IS_OPENWRT=1 || IS_OPENWRT=0; }
 is_openwrt
 
 get_arch() {
@@ -25,6 +26,41 @@ get_arch() {
 
 get_latest_ver() {
     curl -sL https://api.github.com/repos/fatedier/frp/releases/latest | grep tag_name | cut -d '"' -f 4 | sed 's/v//'
+}
+
+# 检测本机实际服务（优先）和角色配置
+detect_role() {
+    # 优先检测服务端
+    if [ "$IS_OPENWRT" = "1" ]; then
+        if [ -f "$FRPS_BIN" ] && /etc/init.d/frps enabled 2>/dev/null; then
+            echo "server"
+            return
+        fi
+        if [ -f "$FRPC_BIN" ] && /etc/init.d/frpc enabled 2>/dev/null; then
+            echo "client"
+            return
+        fi
+    else
+        systemctl list-unit-files | grep -q frps.service && systemctl is-enabled frps &>/dev/null && [ -f "$FRPS_BIN" ] && echo "server" && return
+        systemctl list-unit-files | grep -q frpc.service && systemctl is-enabled frpc &>/dev/null && [ -f "$FRPC_BIN" ] && echo "client" && return
+    fi
+    # 再检测标记
+    if [ -f "$ROLE_FILE" ]; then
+        cat "$ROLE_FILE"
+    else
+        echo "unknown"
+    fi
+}
+
+# 角色切换兼容所有启动方式
+switch_role_and_restart() {
+    rm -f "$ROLE_FILE"
+    if [ -f "$0" ] && [ -r "$0" ]; then
+        bash "$0"
+    else
+        bash <(curl -fsSL "$SCRIPT_URL")
+    fi
+    exit 0
 }
 
 select_role() {
@@ -314,7 +350,7 @@ server_menu() {
             6) status_frps; read -p "按回车返回菜单..." ;;
             7) log_frps ;;
             8) uninstall_frp ;;
-            9) rm -f $ROLE_FILE; bash "$0"; exit 0 ;;
+            9) switch_role_and_restart ;;
             0) exit 0 ;;
             *) echo "无效选择，重新输入！" && sleep 1 ;;
         esac
@@ -353,21 +389,22 @@ client_menu() {
             9) status_frpc; read -p "按回车返回菜单..." ;;
             10) log_frpc ;;
             11) uninstall_frp ;;
-            12) rm -f $ROLE_FILE; bash "$0"; exit 0 ;;
+            12) switch_role_and_restart ;;
             0) exit 0 ;;
             *) echo "无效选择，重新输入！" && sleep 1 ;;
         esac
     done
 }
 
-if [ ! -f $ROLE_FILE ]; then
-    select_role
-fi
-ROLE=$(cat $ROLE_FILE 2>/dev/null)
-if [[ "$ROLE" == "server" ]]; then
-    server_menu
-elif [[ "$ROLE" == "client" ]]; then
-    client_menu
-else
-    select_role
-fi
+# ---------- 启动入口，自动检测角色 ----------
+role="$(detect_role)"
+case "$role" in
+    server) server_menu ;;
+    client) client_menu ;;
+    *)
+        select_role
+        role2="$(detect_role)"
+        [ "$role2" = "server" ] && server_menu
+        [ "$role2" = "client" ] && client_menu
+        ;;
+esac
