@@ -266,7 +266,6 @@ view_frpc_rules() {
     echo -e "\n\033[36m[当前 FRPC 规则]\033[0m"
     awk '/^\[.*\]/{print "\n" $0} !/^\[.*\]/{print $0}' $FRP_INSTALL_DIR/frpc.ini
     echo
-    read -p "按回车返回菜单..."
 }
 
 delete_frpc_rule() {
