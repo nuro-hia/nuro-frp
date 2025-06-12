@@ -332,24 +332,22 @@ server_menu() {
         echo -e "\e[32m==== NuroHia · FRP 服务端菜单（自动适配 OpenWrt/Linux）====\e[0m"
         echo "1) 一键安装/升级 FRPS"
         echo "2) 初始化配置并启动"
-        echo "3) 启动 FRPS"
-        echo "4) 停止 FRPS"
-        echo "5) 重启 FRPS"
-        echo "6) 查看 FRPS 状态"
-        echo "7) 查看 FRPS 日志"
-        echo "8) 卸载 FRPS"
+        echo "3) 停止 FRPS"
+        echo "4) 重启 FRPS"
+        echo "5) 查看 FRPS 状态"
+        echo "6) 查看 FRPS 日志"
+        echo "7) 卸载 FRPS"
         echo "0) 退出"
         echo "-----------------------------"
-        read -p "请选择 [0-8]: " choice
+        read -p "请选择 [0-7]: " choice
         case $choice in
             1) install_frp ;;
             2) init_frps_and_start ;;
-            3) start_frps ;;
-            4) stop_frps ;;
-            5) restart_frps ;;
-            6) status_frps; read -p "按回车返回菜单..." ;;
-            7) log_frps ;;
-            8) uninstall_frp ;;
+            3) stop_frps ;;
+            4) restart_frps ;;
+            5) status_frps; read -p "按回车返回菜单..." ;;
+            6) log_frps ;;
+            7) uninstall_frp ;;
             0) exit 0 ;;
             *) echo "无效选择，重新输入！" && sleep 1 ;;
         esac
@@ -366,27 +364,25 @@ client_menu() {
         echo "3) 新增端口转发规则"
         echo "4) 删除端口转发规则"
         echo "5) 查看所有端口规则"
-        echo "6) 启动 FRPC"
-        echo "7) 停止 FRPC"
-        echo "8) 重启 FRPC"
-        echo "9) 查看 FRPC 状态"
-        echo "10) 查看 FRPC 日志"
-        echo "11) 卸载 FRPC"
+        echo "6) 停止 FRPC"
+        echo "7) 重启 FRPC"
+        echo "8) 查看 FRPC 状态"
+        echo "9) 查看 FRPC 日志"
+        echo "10) 卸载 FRPC"
         echo "0) 退出"
         echo "-----------------------------"
-        read -p "请选择 [0-11]: " choice
+        read -p "请选择 [0-10]: " choice
         case $choice in
             1) install_frp ;;
             2) init_frpc_and_start ;;
             3) add_frpc_rule ;;
             4) delete_frpc_rule ;;
             5) view_frpc_rules ;;
-            6) start_frpc ;;
-            7) stop_frpc ;;
-            8) restart_frpc ;;
-            9) status_frpc; read -p "按回车返回菜单..." ;;
-            10) log_frpc ;;
-            11) uninstall_frp ;;
+            6) stop_frpc ;;
+            7) restart_frpc ;;
+            8) status_frpc; read -p "按回车返回菜单..." ;;
+            9) log_frpc ;;
+            10) uninstall_frp ;;
             0) exit 0 ;;
             *) echo "无效选择，重新输入！" && sleep 1 ;;
         esac
