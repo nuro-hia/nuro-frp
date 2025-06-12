@@ -300,7 +300,7 @@ log_frpc() {
 server_menu() {
     while true; do
         clear
-        echo -e "\e[32m==== NuroHia · FRP 服务端菜单（已检测到本机为服务端） ====\e[0m"
+        echo -e "\e[32m==== NuroHia · FRP 服务端菜单（自动适配 OpenWrt/Linux）====\e[0m"
         echo "1) 一键安装/升级 FRPS"
         echo "2) 初始化 FRPS 配置"
         echo "3) 启动 FRPS"
@@ -331,7 +331,7 @@ server_menu() {
 client_menu() {
     while true; do
         clear
-        echo -e "\e[36m==== NuroHia · FRP 客户端菜单（已检测到本机为客户端） ====\e[0m"
+        echo -e "\e[36m==== NuroHia · FRP 客户端菜单（多规则+自动适配 OpenWrt/Linux） ====\e[0m"
         echo "1) 一键安装/升级 FRPC"
         echo "2) 初始化 FRPC 公共参数"
         echo "3) 新增端口转发规则"
