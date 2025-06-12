@@ -24,6 +24,7 @@ get_latest_ver() {
 # 角色选择和记忆
 select_role() {
     clear
+    mkdir -p $FRP_INSTALL_DIR
     echo "请选择本机角色："
     echo "1) 安装/管理 FRPS（服务端, 推荐在 VPS/公网服务器运行）"
     echo "2) 安装/管理 FRPC（客户端, 用于需要被穿透的内网设备）"
