@@ -40,6 +40,7 @@ select_role() {
     echo "1) FRPS 服务端 (用于公网VPS)"
     echo "2) FRPC 客户端 (用于内网/被穿透设备)"
     read -p "输入 1 或 2 并回车: " role
+    mkdir -p "$FRP_INSTALL_DIR"
     case $role in
         1) echo "server" > $ROLE_FILE ;;
         2) echo "client" > $ROLE_FILE ;;
