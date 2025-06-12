@@ -315,6 +315,34 @@ status_frpc() {
     echo
 }
 
+show_frps_dashboard_info() {
+    is_inited || { echo -e "\e[31m请先初始化配置并启动 FRPS！\e[0m"; sleep 2; return; }
+    echo -e "\n\033[32m[FRPS 面板信息/当前配置]\033[0m"
+    if [ -f $FRP_INSTALL_DIR/frps.ini ]; then
+        local DASH_PORT DASH_USER DASH_PWD FRP_TOKEN
+        DASH_PORT=$(awk -F'=' '/dashboard_port/{gsub(/ /,"",$2);print $2}' $FRP_INSTALL_DIR/frps.ini)
+        DASH_USER=$(awk -F'=' '/dashboard_user/{gsub(/ /,"",$2);print $2}' $FRP_INSTALL_DIR/frps.ini)
+        DASH_PWD=$(awk -F'=' '/dashboard_pwd/{gsub(/ /,"",$2);print $2}' $FRP_INSTALL_DIR/frps.ini)
+        FRP_TOKEN=$(awk -F'=' '/token/{gsub(/ /,"",$2);print $2}' $FRP_INSTALL_DIR/frps.ini)
+        [ -z "$DASH_PORT" ] && DASH_PORT="7500"
+        [ -z "$DASH_USER" ] && DASH_USER="admin"
+        [ -z "$DASH_PWD" ] && DASH_PWD="admin123"
+        local DASH_IP
+        DASH_IP=$(hostname -I | awk '{print $1}')
+        echo -e "面板访问地址：\033[36mhttp://$DASH_IP:$DASH_PORT\033[0m"
+        echo -e "用户名：\033[33m$DASH_USER\033[0m"
+        echo -e "密码：\033[33m$DASH_PWD\033[0m"
+        [ -n "$FRP_TOKEN" ] && echo -e "Token：\033[33m$FRP_TOKEN\033[0m"
+        echo
+        echo "完整配置："
+        cat $FRP_INSTALL_DIR/frps.ini
+    else
+        echo "未找到配置文件 $FRP_INSTALL_DIR/frps.ini"
+    fi
+    echo
+    read -p "按回车返回菜单..."
+}
+
 log_frpc() {
     is_inited || { echo -e "\e[31m请先初始化配置并启动 FRPC！\e[0m"; sleep 2; return; }
     if [ "$IS_OPENWRT" = "1" ]; then
@@ -335,19 +363,21 @@ server_menu() {
         echo "3) 停止 FRPS"
         echo "4) 重启 FRPS"
         echo "5) 查看 FRPS 状态"
-        echo "6) 查看 FRPS 日志"
-        echo "7) 卸载 FRPS"
+        echo "6) 查看 面板信息/配置"
+        echo "7) 查看 FRPS 日志"
+        echo "8) 卸载 FRPS"
         echo "0) 退出"
         echo "-----------------------------"
-        read -p "请选择 [0-7]: " choice
+        read -p "请选择 [0-8]: " choice
         case $choice in
             1) install_frp ;;
             2) init_frps_and_start ;;
             3) stop_frps ;;
             4) restart_frps ;;
             5) status_frps; read -p "按回车返回菜单..." ;;
-            6) log_frps ;;
-            7) uninstall_frp ;;
+            6) show_frps_dashboard_info ;;
+            7) log_frps ;;
+            8) uninstall_frp ;;
             0) exit 0 ;;
             *) echo "无效选择，重新输入！" && sleep 1 ;;
         esac
