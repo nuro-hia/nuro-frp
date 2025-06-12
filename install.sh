@@ -7,13 +7,11 @@ FRPS_BIN="/usr/local/bin/frps"
 FRPC_BIN="/usr/local/bin/frpc"
 IS_OPENWRT=0
 
-# --------- 平台识别 ---------
 is_openwrt() {
     [ -f /etc/openwrt_release ] && IS_OPENWRT=1 || IS_OPENWRT=0
 }
 is_openwrt
 
-# --------- 架构/版本获取 ---------
 get_arch() {
     case "$(uname -m)" in
         x86_64) echo "amd64";;
@@ -29,7 +27,6 @@ get_latest_ver() {
     curl -sL https://api.github.com/repos/fatedier/frp/releases/latest | grep tag_name | cut -d '"' -f 4 | sed 's/v//'
 }
 
-# --------- 角色选择 ---------
 select_role() {
     clear
     mkdir -p $FRP_INSTALL_DIR
@@ -44,7 +41,6 @@ select_role() {
     esac
 }
 
-# --------- 安装FRP ---------
 install_frp() {
     echo "正在安装 FRP..."
     mkdir -p $FRP_INSTALL_DIR
@@ -60,7 +56,6 @@ install_frp() {
     echo "FRP 安装完成。"
 }
 
-# --------- OpenWrt守护脚本 ---------
 write_initd_frps() {
 cat > /etc/init.d/frps <<'EOF'
 #!/bin/sh /etc/rc.common
@@ -68,7 +63,6 @@ START=99
 USE_PROCD=1
 PROG=/usr/local/bin/frps
 CFG=/opt/frp/frps.ini
-
 start_service() {
     procd_open_instance
     procd_set_param command $PROG -c $CFG
@@ -80,6 +74,21 @@ chmod +x /etc/init.d/frps
 /etc/init.d/frps enable
 }
 
+write_systemd_frps() {
+cat > /etc/systemd/system/frps.service <<EOF
+[Unit]
+Description=frps
+After=network.target
+[Service]
+Type=simple
+ExecStart=$FRPS_BIN -c $FRP_INSTALL_DIR/frps.ini
+Restart=always
+[Install]
+WantedBy=multi-user.target
+EOF
+systemctl daemon-reload
+}
+
 write_initd_frpc() {
 cat > /etc/init.d/frpc <<'EOF'
 #!/bin/sh /etc/rc.common
@@ -87,7 +96,6 @@ START=99
 USE_PROCD=1
 PROG=/usr/local/bin/frpc
 CFG=/opt/frp/frpc.ini
-
 start_service() {
     procd_open_instance
     procd_set_param command $PROG -c $CFG
@@ -99,42 +107,21 @@ chmod +x /etc/init.d/frpc
 /etc/init.d/frpc enable
 }
 
-# --------- Systemd 守护脚本 ---------
-write_systemd_frps() {
-cat > /etc/systemd/system/frps.service <<EOF
-[Unit]
-Description=frps
-After=network.target
-
-[Service]
-Type=simple
-ExecStart=$FRPS_BIN -c $FRP_INSTALL_DIR/frps.ini
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-EOF
-systemctl daemon-reload
-}
-
 write_systemd_frpc() {
 cat > /etc/systemd/system/frpc.service <<EOF
 [Unit]
 Description=frpc
 After=network.target
-
 [Service]
 Type=simple
 ExecStart=$FRPC_BIN -c $FRP_INSTALL_DIR/frpc.ini
 Restart=always
-
 [Install]
 WantedBy=multi-user.target
 EOF
 systemctl daemon-reload
 }
 
-# --------- 卸载 ---------
 uninstall_frp() {
     echo "卸载 FRP..."
     if [ "$IS_OPENWRT" = "1" ]; then
@@ -152,9 +139,9 @@ uninstall_frp() {
     rm -f $ROLE_FILE
 }
 
-# --------- 生成配置并自动启动 ---------
-generate_and_run_frps() {
-    echo "=== 请输入 FRPS 服务端配置参数（直接回车为默认）==="
+# -------- 服务端配置 --------
+init_frps_config() {
+    echo "=== 初始化 FRPS 配置 ==="
     read -p "监听端口 [默认7000]: " BIND_PORT
     BIND_PORT=${BIND_PORT:-7000}
     read -p "面板端口 [默认7500]: " DASH_PORT
@@ -174,22 +161,14 @@ dashboard_pwd = $DASH_PWD
 EOF
     [[ -n "$FRP_TOKEN" ]] && echo "token = $FRP_TOKEN" >> $FRP_INSTALL_DIR/frps.ini
 
-    # 写守护脚本
     if [ "$IS_OPENWRT" = "1" ]; then
         write_initd_frps
-        /etc/init.d/frps restart
     else
         write_systemd_frps
-        systemctl enable --now frps
     fi
 
-    sleep 1
-    clear
-    echo -e "\n\033[32m[FRPS] 启动完成，当前配置如下：\033[0m"
+    echo -e "\n\033[32m[FRPS 配置已生成：$FRP_INSTALL_DIR/frps.ini]\033[0m"
     cat $FRP_INSTALL_DIR/frps.ini
-    echo
-    echo "服务状态："
-    status_frps
     echo -e "\n管理面板: http://$(hostname -I | awk '{print $1}'):$DASH_PORT"
     echo "用户名: $DASH_USER  密码: $DASH_PWD"
     [ -n "$FRP_TOKEN" ] && echo "Token: $FRP_TOKEN"
@@ -197,8 +176,9 @@ EOF
     read -p "按回车返回菜单..."
 }
 
-generate_and_run_frpc() {
-    echo "=== 请输入 FRPC 客户端配置参数 ==="
+# -------- 客户端多规则 --------
+init_frpc_config() {
+    echo "=== 初始化 FRPC 公共参数 ==="
     read -p "frps 服务器IP: " SERVER_IP
     while [[ -z "$SERVER_IP" ]]; do
         read -p "frps 服务器IP不能为空，请重新输入: " SERVER_IP
@@ -207,70 +187,64 @@ generate_and_run_frpc() {
     SERVER_PORT=${SERVER_PORT:-7000}
     read -p "Token（如服务端设置了token则需填写）: " FRP_TOKEN
 
-    echo "现在配置要穿透的服务（可多选，至少选一个）："
-    local sections=""
-    read -p "穿透SSH服务？(y/n) [y]: " ADD_SSH
-    ADD_SSH=${ADD_SSH:-y}
-    if [[ "$ADD_SSH" == "y" || "$ADD_SSH" == "Y" ]]; then
-        read -p "本地SSH端口 [默认22]: " LOCAL_SSH
-        LOCAL_SSH=${LOCAL_SSH:-22}
-        read -p "frps映射端口 [默认6000]: " REMOTE_SSH
-        REMOTE_SSH=${REMOTE_SSH:-6000}
-        sections+="
-[ssh]
-type = tcp
-local_ip = 127.0.0.1
-local_port = $LOCAL_SSH
-remote_port = $REMOTE_SSH
-"
-    fi
-
-    read -p "穿透Web服务？(y/n) [y]: " ADD_WEB
-    ADD_WEB=${ADD_WEB:-y}
-    if [[ "$ADD_WEB" == "y" || "$ADD_WEB" == "Y" ]]; then
-        read -p "本地Web端口 [默认80]: " LOCAL_WEB
-        LOCAL_WEB=${LOCAL_WEB:-80}
-        read -p "frps映射端口 [默认8000]: " REMOTE_WEB
-        REMOTE_WEB=${REMOTE_WEB:-8000}
-        sections+="
-[web]
-type = tcp
-local_ip = 127.0.0.1
-local_port = $LOCAL_WEB
-remote_port = $REMOTE_WEB
-"
-    fi
-
     cat > $FRP_INSTALL_DIR/frpc.ini <<EOF
 [common]
 server_addr = $SERVER_IP
 server_port = $SERVER_PORT
 EOF
     [[ -n "$FRP_TOKEN" ]] && echo "token = $FRP_TOKEN" >> $FRP_INSTALL_DIR/frpc.ini
-    echo "$sections" >> $FRP_INSTALL_DIR/frpc.ini
-
-    if [ "$IS_OPENWRT" = "1" ]; then
-        write_initd_frpc
-        /etc/init.d/frpc restart
-    else
-        write_systemd_frpc
-        systemctl enable --now frpc
-    fi
-
-    sleep 1
-    clear
-    echo -e "\n\033[36m[FRPC] 启动完成，当前配置如下：\033[0m"
-    cat $FRP_INSTALL_DIR/frpc.ini
-    echo
-    echo "服务状态："
-    status_frpc
-    echo -e "\n【用法举例】"
-    [[ "$ADD_SSH" == "y" || "$ADD_SSH" == "Y" ]] && echo "外网可用 ssh 用户名@<VPS_IP> -p $REMOTE_SSH 访问内网SSH"
-    [[ "$ADD_WEB" == "y" || "$ADD_WEB" == "Y" ]] && echo "外网可用 http://<VPS_IP>:$REMOTE_WEB 访问内网Web服务"
+    echo -e "\n已初始化 FRPC 公共参数，可以通过菜单添加端口规则！"
     read -p "按回车返回菜单..."
 }
 
-# --------- 状态&日志 ---------
+add_frpc_rule() {
+    echo "=== 添加 FRPC 端口规则 ==="
+    while true; do
+        read -p "规则名称（如 nas、ssh1、web80 等）: " RULE_NAME
+        read -p "类型 (tcp/udp) [tcp]: " TYPE
+        TYPE=${TYPE:-tcp}
+        read -p "本地IP [127.0.0.1]: " LOCAL_IP
+        LOCAL_IP=${LOCAL_IP:-127.0.0.1}
+        read -p "本地端口: " LOCAL_PORT
+        read -p "VPS端口: " REMOTE_PORT
+
+        cat >> $FRP_INSTALL_DIR/frpc.ini <<EOF
+
+[$RULE_NAME]
+type = $TYPE
+local_ip = $LOCAL_IP
+local_port = $LOCAL_PORT
+remote_port = $REMOTE_PORT
+EOF
+
+        echo -e "\033[32m已添加 [$RULE_NAME] 规则。\033[0m"
+        read -p "是否继续添加规则？(y/n) [n]: " MORE
+        [[ "$MORE" == "y" || "$MORE" == "Y" ]] || break
+    done
+    restart_frpc
+}
+
+view_frpc_rules() {
+    echo -e "\n\033[36m[当前 FRPC 规则]\033[0m"
+    awk '/^\[.*\]/{print "\n" $0} !/^\[.*\]/{print $0}' $FRP_INSTALL_DIR/frpc.ini
+    echo
+    read -p "按回车返回菜单..."
+}
+
+delete_frpc_rule() {
+    view_frpc_rules
+    read -p "输入要删除的规则名称（如web、nas）: " RULE
+    sed -i "/^\[$RULE\]/,/^\[/ { /^\[/!d }" $FRP_INSTALL_DIR/frpc.ini
+    sed -i "/^\[$RULE\]/d" $FRP_INSTALL_DIR/frpc.ini
+    echo "已删除规则 [$RULE]"
+    restart_frpc
+    sleep 1
+}
+
+# -------- 服务操作 --------
+start_frps() { [ "$IS_OPENWRT" = "1" ] && /etc/init.d/frps start || systemctl start frps; echo "frps 已启动"; sleep 1; }
+stop_frps()  { [ "$IS_OPENWRT" = "1" ] && /etc/init.d/frps stop  || systemctl stop frps;  echo "frps 已停止"; sleep 1; }
+restart_frps() { [ "$IS_OPENWRT" = "1" ] && /etc/init.d/frps restart || systemctl restart frps; echo "frps 已重启"; sleep 1; }
 status_frps() {
     if [ "$IS_OPENWRT" = "1" ]; then
         ps | grep [f]rps || echo "frps 进程未启动"
@@ -279,19 +253,6 @@ status_frps() {
     fi
     echo -e "\n\033[32m[当前配置]\033[0m"
     cat $FRP_INSTALL_DIR/frps.ini 2>/dev/null || echo "未找到配置文件"
-    grep '^bind_port' $FRP_INSTALL_DIR/frps.ini 2>/dev/null | awk -F '=' '{print "监听端口: " $2}'
-    grep '^dashboard_port' $FRP_INSTALL_DIR/frps.ini 2>/dev/null | awk -F '=' '{print "管理面板端口: " $2}'
-    echo
-}
-
-status_frpc() {
-    if [ "$IS_OPENWRT" = "1" ]; then
-        ps | grep [f]rpc || echo "frpc 进程未启动"
-    else
-        systemctl status frpc --no-pager | head -20
-    fi
-    echo -e "\n\033[36m[当前配置]\033[0m"
-    cat $FRP_INSTALL_DIR/frpc.ini 2>/dev/null || echo "未找到配置文件"
     echo
 }
 
@@ -304,6 +265,20 @@ log_frps() {
     read -p "按回车返回菜单..."
 }
 
+start_frpc() { [ "$IS_OPENWRT" = "1" ] && /etc/init.d/frpc start || systemctl start frpc; echo "frpc 已启动"; sleep 1; }
+stop_frpc()  { [ "$IS_OPENWRT" = "1" ] && /etc/init.d/frpc stop  || systemctl stop frpc;  echo "frpc 已停止"; sleep 1; }
+restart_frpc() { [ "$IS_OPENWRT" = "1" ] && /etc/init.d/frpc restart || systemctl restart frpc; echo "frpc 已重启"; sleep 1; }
+status_frpc() {
+    if [ "$IS_OPENWRT" = "1" ]; then
+        ps | grep [f]rpc || echo "frpc 进程未启动"
+    else
+        systemctl status frpc --no-pager | head -20
+    fi
+    echo -e "\n\033[36m[当前配置]\033[0m"
+    cat $FRP_INSTALL_DIR/frpc.ini 2>/dev/null || echo "未找到配置文件"
+    echo
+}
+
 log_frpc() {
     if [ "$IS_OPENWRT" = "1" ]; then
         logread | grep frpc | tail -n 30 || echo "OpenWrt 无日志"
@@ -313,82 +288,72 @@ log_frpc() {
     read -p "按回车返回菜单..."
 }
 
-stop_frps() {
-    [ "$IS_OPENWRT" = "1" ] && /etc/init.d/frps stop || systemctl stop frps
-    echo "frps 已停止"
-    sleep 1
-}
-restart_frps() {
-    [ "$IS_OPENWRT" = "1" ] && /etc/init.d/frps restart || systemctl restart frps
-    echo "frps 已重启"
-    sleep 1
-}
-stop_frpc() {
-    [ "$IS_OPENWRT" = "1" ] && /etc/init.d/frpc stop || systemctl stop frpc
-    echo "frpc 已停止"
-    sleep 1
-}
-restart_frpc() {
-    [ "$IS_OPENWRT" = "1" ] && /etc/init.d/frpc restart || systemctl restart frpc
-    echo "frpc 已重启"
-    sleep 1
-}
-
-# ------------------- 菜单 -------------------
+# ------------------- 服务端菜单 -------------------
 server_menu() {
     while true; do
         clear
         echo -e "\e[32m==== NuroHia · FRP 服务端菜单（自动适配 OpenWrt/Linux） ====\e[0m"
         echo "1) 一键安装/升级 FRPS"
-        echo "2) 配置并启动 FRPS"
-        echo "3) 停止 FRPS"
-        echo "4) 重启 FRPS"
-        echo "5) 查看 FRPS 状态"
-        echo "6) 查看 FRPS 日志"
-        echo "7) 卸载 FRPS"
-        echo "8) 切换为客户端菜单"
+        echo "2) 初始化 FRPS 配置"
+        echo "3) 启动 FRPS"
+        echo "4) 停止 FRPS"
+        echo "5) 重启 FRPS"
+        echo "6) 查看 FRPS 状态"
+        echo "7) 查看 FRPS 日志"
+        echo "8) 卸载 FRPS"
+        echo "9) 切换为客户端菜单"
         echo "0) 退出"
         echo "-----------------------------"
-        read -p "请选择 [0-8]: " choice
+        read -p "请选择 [0-9]: " choice
         case $choice in
             1) install_frp ;;
-            2) generate_and_run_frps ;;
-            3) stop_frps ;;
-            4) restart_frps ;;
-            5) status_frps; read -p "按回车返回菜单..." ;;
-            6) log_frps ;;
-            7) uninstall_frp ;;
-            8) rm -f $ROLE_FILE; exec "$0" ;;
+            2) init_frps_config ;;
+            3) start_frps ;;
+            4) stop_frps ;;
+            5) restart_frps ;;
+            6) status_frps; read -p "按回车返回菜单..." ;;
+            7) log_frps ;;
+            8) uninstall_frp ;;
+            9) rm -f $ROLE_FILE; exec "$0" ;;
             0) exit 0 ;;
             *) echo "无效选择，重新输入！" && sleep 1 ;;
         esac
     done
 }
 
+# ------------------- 客户端菜单 -------------------
 client_menu() {
     while true; do
         clear
-        echo -e "\e[36m==== NuroHia · FRP 客户端菜单（自动适配 OpenWrt/Linux） ====\e[0m"
+        echo -e "\e[36m==== NuroHia · FRP 客户端菜单（多规则+自动适配 OpenWrt/Linux） ====\e[0m"
         echo "1) 一键安装/升级 FRPC"
-        echo "2) 配置并启动 FRPC"
-        echo "3) 停止 FRPC"
-        echo "4) 重启 FRPC"
-        echo "5) 查看 FRPC 状态"
-        echo "6) 查看 FRPC 日志"
-        echo "7) 卸载 FRPC"
-        echo "8) 切换为服务端菜单"
+        echo "2) 初始化 FRPC 公共参数"
+        echo "3) 新增端口转发规则"
+        echo "4) 删除端口转发规则"
+        echo "5) 查看所有端口规则"
+        echo "6) 启动 FRPC"
+        echo "7) 停止 FRPC"
+        echo "8) 重启 FRPC"
+        echo "9) 查看 FRPC 状态"
+        echo "10) 查看 FRPC 日志"
+        echo "11) 卸载 FRPC"
+        echo "12) 切换为服务端菜单"
         echo "0) 退出"
         echo "-----------------------------"
-        read -p "请选择 [0-8]: " choice
+        read -p "请选择 [0-12]: " choice
         case $choice in
             1) install_frp ;;
-            2) generate_and_run_frpc ;;
-            3) stop_frpc ;;
-            4) restart_frpc ;;
-            5) status_frpc; read -p "按回车返回菜单..." ;;
-            6) log_frpc ;;
-            7) uninstall_frp ;;
-            8) rm -f $ROLE_FILE; exec "$0" ;;
+            2) init_frpc_config ;;
+            3) add_frpc_rule ;;
+            4) delete_frpc_rule ;;
+            5) view_frpc_rules ;;
+            6) start_frpc ;;
+            7) stop_frpc ;;
+            8) restart_frpc ;;
+            9) status_frpc; read -p "按回车返回菜单..." ;;
+            10) log_frpc ;;
+            11) uninstall_frp ;;
+            12) rm -f $ROLE_FILE; exec "$0" ;;
             0) exit 0 ;;
             *) echo "无效选择，重新输入！" && sleep 1 ;;
         esac
