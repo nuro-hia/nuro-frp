@@ -1,15 +1,11 @@
 #!/bin/bash
 set -e
 
-SCRIPT_URL="https://raw.githubusercontent.com/nuro-hia/nuro-frp/main/install.sh" # ← 修改为你的真实地址
-
 FRP_INSTALL_DIR="/opt/frp"
-ROLE_FILE="$FRP_INSTALL_DIR/.frp_role"
 FRPS_BIN="/usr/local/bin/frps"
 FRPC_BIN="/usr/local/bin/frpc"
 IS_OPENWRT=0
 
-# 判断平台
 is_openwrt() { [ -f /etc/openwrt_release ] && IS_OPENWRT=1 || IS_OPENWRT=0; }
 is_openwrt
 
@@ -28,51 +24,27 @@ get_latest_ver() {
     curl -sL https://api.github.com/repos/fatedier/frp/releases/latest | grep tag_name | cut -d '"' -f 4 | sed 's/v//'
 }
 
-# 检测本机实际服务（优先）和角色配置
 detect_role() {
     # 优先检测服务端
     if [ "$IS_OPENWRT" = "1" ]; then
-        if [ -f "$FRPS_BIN" ] && /etc/init.d/frps enabled 2>/dev/null; then
-            echo "server"
-            return
-        fi
-        if [ -f "$FRPC_BIN" ] && /etc/init.d/frpc enabled 2>/dev/null; then
-            echo "client"
-            return
-        fi
+        [ -f "$FRPS_BIN" ] && /etc/init.d/frps enabled 2>/dev/null && echo "server" && return
+        [ -f "$FRPC_BIN" ] && /etc/init.d/frpc enabled 2>/dev/null && echo "client" && return
     else
         systemctl list-unit-files | grep -q frps.service && systemctl is-enabled frps &>/dev/null && [ -f "$FRPS_BIN" ] && echo "server" && return
         systemctl list-unit-files | grep -q frpc.service && systemctl is-enabled frpc &>/dev/null && [ -f "$FRPC_BIN" ] && echo "client" && return
     fi
-    # 再检测标记
-    if [ -f "$ROLE_FILE" ]; then
-        cat "$ROLE_FILE"
-    else
-        echo "unknown"
-    fi
-}
-
-# 角色切换兼容所有启动方式
-switch_role_and_restart() {
-    rm -f "$ROLE_FILE"
-    if [ -f "$0" ] && [ -r "$0" ]; then
-        bash "$0"
-    else
-        bash <(curl -fsSL "$SCRIPT_URL")
-    fi
-    exit 0
+    echo "unknown"
 }
 
 select_role() {
     clear
-    mkdir -p $FRP_INSTALL_DIR
     echo "请选择本机角色："
     echo "1) FRPS 服务端 (用于公网VPS)"
     echo "2) FRPC 客户端 (用于内网/被穿透设备)"
     read -p "输入 1 或 2 并回车: " role
     case $role in
-        1) echo "server" > $ROLE_FILE ;;
-        2) echo "client" > $ROLE_FILE ;;
+        1) echo "server" ;;
+        2) echo "client" ;;
         *) echo "输入无效，重新运行脚本"; exit 1 ;;
     esac
 }
@@ -172,7 +144,6 @@ uninstall_frp() {
     fi
     rm -rf $FRP_INSTALL_DIR $FRPS_BIN $FRPC_BIN
     echo "FRP 已卸载完成。"
-    rm -f $ROLE_FILE
 }
 
 # -------- 服务端配置 --------
@@ -337,10 +308,9 @@ server_menu() {
         echo "6) 查看 FRPS 状态"
         echo "7) 查看 FRPS 日志"
         echo "8) 卸载 FRPS"
-        echo "9) 切换为客户端菜单"
         echo "0) 退出"
         echo "-----------------------------"
-        read -p "请选择 [0-9]: " choice
+        read -p "请选择 [0-8]: " choice
         case $choice in
             1) install_frp ;;
             2) init_frps_config ;;
@@ -350,7 +320,6 @@ server_menu() {
             6) status_frps; read -p "按回车返回菜单..." ;;
             7) log_frps ;;
             8) uninstall_frp ;;
-            9) switch_role_and_restart ;;
             0) exit 0 ;;
             *) echo "无效选择，重新输入！" && sleep 1 ;;
         esac
@@ -373,10 +342,9 @@ client_menu() {
         echo "9) 查看 FRPC 状态"
         echo "10) 查看 FRPC 日志"
         echo "11) 卸载 FRPC"
-        echo "12) 切换为服务端菜单"
         echo "0) 退出"
         echo "-----------------------------"
-        read -p "请选择 [0-12]: " choice
+        read -p "请选择 [0-11]: " choice
         case $choice in
             1) install_frp ;;
             2) init_frpc_config ;;
@@ -389,7 +357,6 @@ client_menu() {
             9) status_frpc; read -p "按回车返回菜单..." ;;
             10) log_frpc ;;
             11) uninstall_frp ;;
-            12) switch_role_and_restart ;;
             0) exit 0 ;;
             *) echo "无效选择，重新输入！" && sleep 1 ;;
         esac
@@ -402,8 +369,7 @@ case "$role" in
     server) server_menu ;;
     client) client_menu ;;
     *)
-        select_role
-        role2="$(detect_role)"
+        role2="$(select_role)"
         [ "$role2" = "server" ] && server_menu
         [ "$role2" = "client" ] && client_menu
         ;;
