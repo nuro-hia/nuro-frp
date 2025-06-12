@@ -197,6 +197,26 @@ EOF
     read -p "按回车返回菜单..."
 }
 
+show_frps_status() {
+    echo -e "\n\033[32m[FRPS 状态]\033[0m"
+    systemctl status frps --no-pager | head -20
+    echo -e "\n\033[32m[当前配置]\033[0m"
+    cat $FRP_INSTALL_DIR/frps.ini 2>/dev/null || echo "未找到配置文件"
+    grep '^bind_port' $FRP_INSTALL_DIR/frps.ini 2>/dev/null | awk -F '=' '{print "监听端口: " $2}'
+    grep '^dashboard_port' $FRP_INSTALL_DIR/frps.ini 2>/dev/null | awk -F '=' '{print "管理面板端口: " $2}'
+    echo
+    read -p "按回车返回菜单..."
+}
+
+show_frpc_status() {
+    echo -e "\n\033[36m[FRPC 状态]\033[0m"
+    systemctl status frpc --no-pager | head -20
+    echo -e "\n\033[36m[当前配置]\033[0m"
+    cat $FRP_INSTALL_DIR/frpc.ini 2>/dev/null || echo "未找到配置文件"
+    echo
+    read -p "按回车返回菜单..."
+}
+
 # ------------------- 菜单 -------------------
 server_menu() {
     while true; do
@@ -206,20 +226,22 @@ server_menu() {
         echo "2) 配置并启动 FRPS"
         echo "3) 停止 FRPS"
         echo "4) 重启 FRPS"
-        echo "5) 查看 FRPS 日志"
-        echo "6) 卸载 FRPS"
-        echo "7) 切换为客户端菜单"
+        echo "5) 查看 FRPS 状态"
+        echo "6) 查看 FRPS 日志"
+        echo "7) 卸载 FRPS"
+        echo "8) 切换为客户端菜单"
         echo "0) 退出"
         echo "-----------------------------"
-        read -p "请选择 [0-7]: " choice
+        read -p "请选择 [0-8]: " choice
         case $choice in
             1) install_frp ;;
             2) generate_and_run_frps ;;
             3) systemctl stop frps && echo "frps 已停止"; sleep 1 ;;
             4) systemctl restart frps && echo "frps 已重启"; sleep 1 ;;
-            5) journalctl -u frps -n 50 --no-pager; read -p "回车返回..." ;;
-            6) uninstall_frp ;;
-            7) rm -f $ROLE_FILE; exec "$0" ;;
+            5) show_frps_status ;;
+            6) journalctl -u frps -n 50 --no-pager; read -p "回车返回..." ;;
+            7) uninstall_frp ;;
+            8) rm -f $ROLE_FILE; exec "$0" ;;
             0) exit 0 ;;
             *) echo "无效选择，重新输入！" && sleep 1 ;;
         esac
@@ -234,20 +256,22 @@ client_menu() {
         echo "2) 配置并启动 FRPC"
         echo "3) 停止 FRPC"
         echo "4) 重启 FRPC"
-        echo "5) 查看 FRPC 日志"
-        echo "6) 卸载 FRPC"
-        echo "7) 切换为服务端菜单"
+        echo "5) 查看 FRPC 状态"
+        echo "6) 查看 FRPC 日志"
+        echo "7) 卸载 FRPC"
+        echo "8) 切换为服务端菜单"
         echo "0) 退出"
         echo "-----------------------------"
-        read -p "请选择 [0-7]: " choice
+        read -p "请选择 [0-8]: " choice
         case $choice in
             1) install_frp ;;
             2) generate_and_run_frpc ;;
             3) systemctl stop frpc && echo "frpc 已停止"; sleep 1 ;;
             4) systemctl restart frpc && echo "frpc 已重启"; sleep 1 ;;
-            5) journalctl -u frpc -n 50 --no-pager; read -p "回车返回..." ;;
-            6) uninstall_frp ;;
-            7) rm -f $ROLE_FILE; exec "$0" ;;
+            5) show_frpc_status ;;
+            6) journalctl -u frpc -n 50 --no-pager; read -p "回车返回..." ;;
+            7) uninstall_frp ;;
+            8) rm -f $ROLE_FILE; exec "$0" ;;
             0) exit 0 ;;
             *) echo "无效选择，重新输入！" && sleep 1 ;;
         esac
