@@ -314,7 +314,7 @@ server_menu() {
             6) status_frps; read -p "按回车返回菜单..." ;;
             7) log_frps ;;
             8) uninstall_frp ;;
-            9) rm -f $ROLE_FILE; exec "$0" ;;
+            9) rm -f $ROLE_FILE; bash "$0"; exit 0 ;;
             0) exit 0 ;;
             *) echo "无效选择，重新输入！" && sleep 1 ;;
         esac
@@ -353,7 +353,7 @@ client_menu() {
             9) status_frpc; read -p "按回车返回菜单..." ;;
             10) log_frpc ;;
             11) uninstall_frp ;;
-            12) rm -f $ROLE_FILE; exec "$0" ;;
+            12) rm -f $ROLE_FILE; bash "$0"; exit 0 ;;
             0) exit 0 ;;
             *) echo "无效选择，重新输入！" && sleep 1 ;;
         esac
